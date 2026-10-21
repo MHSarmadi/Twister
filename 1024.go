@@ -4,22 +4,25 @@ import "math/bits"
 
 type State1024 [16]uint64
 
-func NewState1024(seed uint64) *State1024 {
+func NewState1024_64bitSeed(seed uint64) *State1024 {
 	result := &State1024{}
+	result[0] = seed
 
-	result[0x0] = seed
-	result.quarter_ab2ab([4]int{0x0, 0x1, 0x2, 0x3})
-
-	result[0x4] = result[0x3]
-	result.quarter_ab2ab([4]int{0x4, 0x5, 0x6, 0x7})
-
-	result[0x8] = result[0x7]
-	result.quarter_ab2ab([4]int{0x8, 0x9, 0xa, 0xb})
-
-	result[0xc] = result[0xb]
-	result.quarter_ab2ab([4]int{0xc, 0xd, 0xe, 0xf})
+	result.Permute()
 
 	return result
+}
+
+func NewState1024_256bitSeed(seed [4]uint64) *State1024 {
+	s := &State1024{}
+	indices := [4]int{0x0, 0xd, 0xe, 0x3}
+
+	for i := 0; i < 4; i++ {
+		s[indices[i]] = seed[i]
+	}
+
+	s.Permute()
+	return s
 }
 
 // First number gets combined with a, and the last number getting combined is also a.
