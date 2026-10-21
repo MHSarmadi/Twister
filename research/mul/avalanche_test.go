@@ -20,7 +20,7 @@ func avalancheHamming(a, b State256) int {
 // permuteN applies simple_permuter n times.
 func permuteN(s State256, n int) State256 {
 	for i := 0; i < n; i++ {
-		s.mult_permuter()
+		s.MultPermuter()
 	}
 	return s
 }

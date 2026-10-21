@@ -6,7 +6,7 @@ type State256 [4]uint64
 
 const c0, c1 uint64 = 0x5477697374657221, 0x205361726d616469
 
-func (s *State256) mult_permuter() {
+func (s *State256) MultPermuter() {
 	var a, b uint64
 
 	// Injecting "Twister! Sarmadi"
