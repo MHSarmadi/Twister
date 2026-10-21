@@ -4,108 +4,145 @@ import "math/bits"
 
 type State1024 [16]uint64
 
+func NewState1024(seed uint64) *State1024 {
+	result := &State1024{}
+
+	result[0x0] = seed
+	result.quarter_ab2ab([4]int{0x0, 0x1, 0x2, 0x3})
+
+	result[0x4] = result[0x3]
+	result.quarter_ab2ab([4]int{0x4, 0x5, 0x6, 0x7})
+
+	result[0x8] = result[0x7]
+	result.quarter_ab2ab([4]int{0x8, 0x9, 0xa, 0xb})
+
+	result[0xc] = result[0xb]
+	result.quarter_ab2ab([4]int{0xc, 0xd, 0xe, 0xf})
+
+	return result
+}
+
 // First number gets combined with a, and the last number getting combined is also a.
-func (s *State1024) quarter_a2a(rotl_c, i [4]int) {
+func (s *State1024) quarter_ab2ab(i [4]int) {
+	var x, y uint64
 	a, b, c, d := s[i[0]], s[i[1]], s[i[2]], s[i[3]]
 
-	b += a
-	c ^= b
-	c = bits.RotateLeft64(c, rotl_c[0])
-	d += c
-	a ^= d
-	a = bits.RotateLeft64(a, rotl_c[1])
+	// Injecting "Twister! Sarmadi"
+	a ^= c0
+	b ^= c1
 
-	c += a
-	d ^= c
-	d = bits.RotateLeft64(d, rotl_c[2])
-	b += d
-	b = bits.RotateLeft64(b, rotl_c[3])
-	a ^= b
+	// Pre-round mixture
+	mixture := a ^ b ^ c ^ d
+	a, b, c, d = mixture^d, mixture^c, mixture^b, mixture^a
 
-	s[i[0]], s[i[1]], s[i[2]], s[i[3]] = a, b, c, d
+	// Sixteenth round 1
+	x, y = bits.Mul64(a, b)
+
+	a = bits.RotateLeft64(a, 32)
+	b = bits.RotateLeft64(b, 32)
+	c ^= x
+	d ^= y
+
+	// Sixteenth round 2
+	x, y = bits.Mul64(b, c)
+
+	a ^= x
+	c = bits.RotateLeft64(c, 32)
+	d += y
+
+	// Sixteenth round 3
+	x, y = bits.Mul64(a, d)
+
+	b ^= x
+	c += y
+	d = bits.RotateLeft64(d, 32)
+
+	// Sixteenth round 4
+	x, y = bits.Mul64(c, d)
+
+	a += x
+	b += y
+
+	// Post-round mixture
+	mixture = a + b + c + d
+	s[i[0]], s[i[1]], s[i[2]], s[i[3]] = mixture-d, mixture-c, mixture-b, mixture-a
 }
 
-// Independent starters: 0, 9, e, f
-func (s *State1024) permute_col2rdiag(rotl_c [4]int) {
+// Independent starters: 04 9d e2 f3
+// Total Similarities to Rdiag2Row: 04d2f3 (75%)
+func (s *State1024) permute_col2rdiag() {
 	// col 0, a2a
-	s.quarter_a2a(rotl_c, [4]int{0x0, 0x4, 0x8, 0xc}) // 0 is the a-th in the col
+	s.quarter_ab2ab([4]int{0x0, 0x4, 0x8, 0xc})
 
 	// col 1, c2c
-	s.quarter_a2a(rotl_c, [4]int{0x9, 0xd, 0x1, 0x5}) // 9 is the c-th in the col
+	s.quarter_ab2ab([4]int{0x9, 0xd, 0x1, 0x5})
 
 	// col 2, d2d
-	s.quarter_a2a(rotl_c, [4]int{0xe, 0x2, 0x6, 0xa}) // e is the d-th in the col
+	s.quarter_ab2ab([4]int{0xe, 0x2, 0x6, 0xa})
 
 	// col 3, d2d
-	s.quarter_a2a(rotl_c, [4]int{0xf, 0x3, 0x7, 0xb}) // f is the d-th in the col
+	s.quarter_ab2ab([4]int{0xf, 0x3, 0x7, 0xb})
 }
 
-// Independent starters: 0 b f 6
-func (s *State1024) permute_rdiag2row(rotl_c [4]int) {
+// Independent starters: 0d b4 f2 63
+// Total Similarities to Row2Ldiag: 0db4f63 (87.5%)
+func (s *State1024) permute_rdiag2row() {
 	// rdiag 0, a2a
-	s.quarter_a2a(rotl_c, [4]int{0x0, 0x7, 0xa, 0xd}) // 0 is the a-th in the rdiag
+	s.quarter_ab2ab([4]int{0x0, 0xd, 0x7, 0xa})
 
 	// rdiag 1, c2c
-	s.quarter_a2a(rotl_c, [4]int{0xb, 0xe, 0x1, 0x4}) // b is the c-th in the rdiag
+	s.quarter_ab2ab([4]int{0xb, 0x4, 0xe, 0x1})
 
 	// rdiag 2, d2d
-	s.quarter_a2a(rotl_c, [4]int{0xf, 0x2, 0x5, 0x8}) // f is the d-th in the rdiag
+	s.quarter_ab2ab([4]int{0xf, 0x2, 0x5, 0x8})
 
 	// rdiag 3, b2b
-	s.quarter_a2a(rotl_c, [4]int{0x6, 0x9, 0xc, 0x3}) // 6 is the b-th in the rdiag
+	s.quarter_ab2ab([4]int{0x6, 0x3, 0x9, 0xc})
 }
 
-// Independent starters: 0 4 b d
-func (s *State1024) permute_row2ldiag(rotl_c [4]int) {
+// Independent starters: 03 46 b9 df
+// Total Similarities to Ldiag2Col: 046b9df (87.5%)
+func (s *State1024) permute_row2ldiag() {
 	// row 0, a2a
-	s.quarter_a2a(rotl_c, [4]int{0x0, 0x1, 0x2, 0x3}) // 0 is the a-th in the row
+	s.quarter_ab2ab([4]int{0x0, 0x3, 0x1, 0x2})
 
 	// row 1, a2a
-	s.quarter_a2a(rotl_c, [4]int{0x4, 0x5, 0x6, 0x7}) // 4 is the a-th in the row
+	s.quarter_ab2ab([4]int{0x4, 0x6, 0x5, 0x7})
 
 	// row 2, d2d
-	s.quarter_a2a(rotl_c, [4]int{0xb, 0x8, 0x9, 0xa}) // b is the d-th in the row
+	s.quarter_ab2ab([4]int{0xb, 0x9, 0x8, 0xa})
 
 	// row 3, b2b
-	s.quarter_a2a(rotl_c, [4]int{0xd, 0xe, 0xf, 0xc}) // d is the b-th in the row
+	s.quarter_ab2ab([4]int{0xd, 0xf, 0xe, 0xc})
 }
 
-// Independent starters: 0 b 2 9
-func (s *State1024) permute_ldiag2col(rotl_c [4]int) {
+// Independent starters: 0f b6 2d 94
+// Total Similarities to Col2Rdiag: 0fb2d94 (87.5%)
+func (s *State1024) permute_ldiag2col() {
 	// ldiag 0, a2a
-	s.quarter_a2a(rotl_c, [4]int{0x0, 0x5, 0xa, 0xf}) // 0 is the a-th in the ldiag
+	s.quarter_ab2ab([4]int{0x0, 0xf, 0x5, 0xa})
 
 	// ldiag 1, c2c
-	s.quarter_a2a(rotl_c, [4]int{0xb, 0xc, 0x1, 0x6}) // b is the c-th in the ldiag
+	s.quarter_ab2ab([4]int{0xb, 0x6, 0xc, 0x1})
 
 	// ldiag 2, a2a
-	s.quarter_a2a(rotl_c, [4]int{0x2, 0x7, 0x8, 0xd}) // 2 is the a-th in the ldiag
+	s.quarter_ab2ab([4]int{0x2, 0xd, 0x7, 0x8})
 
 	// ldiag 3, c2c
-	s.quarter_a2a(rotl_c, [4]int{0x9, 0xe, 0x3, 0x4}) // 9 is the c-th in the ldiag
-}
-
-func (s *State1024) inject(injectibles [4]uint64, i [4]int) {
-	for n := range 4 {
-		s[i[n]] ^= injectibles[n]
-	}
+	s.quarter_ab2ab([4]int{0x9, 0x4, 0xe, 0x3})
 }
 
 func (s *State1024) Permute() {
-	const rounds = 5 // 5 * 4 == 20 overall
+	const rounds = 4 // 4 * 4 * 4 == 64 overall
 
-	for i := range rounds {
-		s.inject(injectables[i], [4]int{0x0, 0x9, 0xe, 0xf}) // Col independent starters
-		s.permute_col2rdiag(rotl_c[i])
+	for range rounds {
+		s.permute_col2rdiag()
 
-		s.inject(injectables[i], [4]int{0x0, 0xb, 0xf, 0x6}) // Rdiag independent starters
-		s.permute_rdiag2row(rotl_c[i])
+		s.permute_rdiag2row()
 
-		s.inject(injectables[i], [4]int{0x0, 0x4, 0xb, 0xd}) // Row independent starters
-		s.permute_row2ldiag(rotl_c[i])
+		s.permute_row2ldiag()
 
-		s.inject(injectables[i], [4]int{0x0, 0xb, 0x2, 0x9}) // Ldiag independent starters
-		s.permute_ldiag2col(rotl_c[i])
+		s.permute_ldiag2col()
 	}
 }
 
@@ -115,44 +152,5 @@ func (s *State1024) Wipe() {
 	}
 }
 
-var rotl_c = [5][4]int{
-	{5, -13, 16, -29},
-	{-13, 16, -29, 5},
-	{16, -29, 5, -13},
-	{-29, 5, -13, 16},
-	{5, -13, 16, -29},
-}
-
-// Truly random generated
-var injectables = [5][4]uint64{
-	{
-		0x24690a45a36babab,
-		0x5917cb2b135a3977,
-		0xd0d2f5d029fef71d,
-		0x2611c7c3f2035149,
-	},
-	{
-		0x439e5ce0062265c8,
-		0x860a47a159a16ab8,
-		0x5e64403011b6419b,
-		0x8d8497e54e53c8de,
-	},
-	{
-		0x0011e1fe1f467a11,
-		0x51cf1b0c57c37f7d,
-		0x950242da495f13fd,
-		0x5dd09b2f0ca7d642,
-	},
-	{
-		0x4085225bc9504bd0,
-		0xa6d41eec06b3bd18,
-		0x4ccf41b4abb8eeec,
-		0x8978c36993c7087b,
-	},
-	{
-		0x548660187bf9a40e,
-		0x12ac87fdfb2f77a4,
-		0xbffe72d36d656785,
-		0x18fad47860e3ee86,
-	},
-}
+// "Twister! Sarmadi"
+const c0, c1 uint64 = 0x5477697374657221, 0x205361726d616469
