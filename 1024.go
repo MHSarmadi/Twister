@@ -4,8 +4,8 @@ import "math/bits"
 
 type State1024 [16]uint64
 
-func NewState1024_64bitSeed(seed uint64) *State1024 {
-	result := &State1024{}
+func NewState1024_64bitSeed(seed uint64) State1024 {
+	result := State1024{}
 	result[0] = seed
 
 	result.Permute()
@@ -13,8 +13,8 @@ func NewState1024_64bitSeed(seed uint64) *State1024 {
 	return result
 }
 
-func NewState1024_256bitSeed(seed [4]uint64) *State1024 {
-	s := &State1024{}
+func NewState1024_256bitSeed(seed [4]uint64) State1024 {
+	s := State1024{}
 	indices := [4]int{0x0, 0xd, 0xe, 0x3}
 
 	for i := 0; i < 4; i++ {
